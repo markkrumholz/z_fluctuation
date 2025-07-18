@@ -20,7 +20,7 @@ Running the `process_data.py` script requires the following python packages:
 * [numpy](https://numpy.org/)
 * [scipy](https://scipy.org/)
 * [matplotlib](https://matplotlib.org/)
-* [astropy](https://www.astropy.org/) (not strictly required, but provides greatly enhanced functionality)
+* [astropy](https://www.astropy.org/) 
 * [slugpy](https://bitbucket.org/krumholz/slug)
 
 ### License ###
