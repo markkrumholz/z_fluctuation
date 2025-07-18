@@ -25,4 +25,4 @@ Running the `process_data.py` script requires the following python packages:
 
 ### License ###
 
-This code is distributed under the terms of the [GNU General Public License](http://www.gnu.org/copyleft/gpl.html) version 3.0. The text of the license is included in the main directory of the repository as `LICENSE.txt`.
+This code is distributed under the terms of the [GNU General Public License](http://www.gnu.org/copyleft/gpl.html) version 3.0. The text of the license is included in the main directory of the repository as `LICENSE`.
