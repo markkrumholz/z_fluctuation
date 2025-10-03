@@ -178,7 +178,7 @@ for i, e in enumerate(elem_for_table):
     print("\\\\", file=fp)
 fp.close()
 
-# Set physical and observational parameters
+# Set fiducial physical and observational parameters
 lcorr = 1 * u.kpc
 h = 150 * u.pc
 sigmag = 7 * u.km/u.s
@@ -195,20 +195,39 @@ sigma_beam = FWHM_beam / (2**1.5 * np.log(2))
 fgas = 2                        # Gas error
 sigma_logZ = [0.01, 0.03]       # Stellar metallicity errors
 
+# Alternative values for select parameters
+kappa_alt = np.array([1/3., 3.]) * kappa
+sigmav_alt = np.array([1/3., 3.]) * sigmav
+lcorr_alt = np.array([1/2., 2.]) * lcorr
 
 # Define a function to evaluate the non-normalized elemental
 # cross-correlation function
-def computeXi(p1, p2, beam = False, return_coef = False):
+def computeXi(p1, p2, beam = False, return_coef = False, use_alt = False):
     Xi = 0
     alpha = np.zeros((len(channels), len(channels)))
     beta = np.zeros((len(channels), len(channels)))
     gamma = np.zeros((len(channels), len(channels)))
+    if use_alt:
+        Xi_kappa_alt = 0
+        Xi_sigmav_alt = 0
+        Xi_lcorr_alt = 0
+        alpha_kappa_alt = np.zeros((len(channels), len(channels), 2))
+        alpha_sigmav_alt = np.zeros((len(channels), len(channels), 2))
+        alpha_lcorr_alt = np.zeros((len(channels), len(channels), 2))
+        beta_kappa_alt = np.zeros((len(channels), len(channels), 2))
+        beta_sigmav_alt = np.zeros((len(channels), len(channels), 2))
+        beta_lcorr_alt = np.zeros((len(channels), len(channels), 2))
+        gamma_kappa_alt = np.zeros((len(channels), len(channels), 2))
+        gamma_sigmav_alt = np.zeros((len(channels), len(channels), 2))
+        gamma_lcorr_alt = np.zeros((len(channels), len(channels), 2))
     for i, ch in enumerate(channels):
         fXi = p1['f_'+ch]
         if fXi == 0:
             continue
         tXi = p1['t50_'+ch]
         lXi2 = kappa * tXi
+        if use_alt:
+            lXi2_kappa_alt = kappa_alt * tXi
         sigmaXi2 = sigma_inj[ch]**2
         if beam:
             sigmaXi2 += sigma_beam**2
@@ -219,6 +238,8 @@ def computeXi(p1, p2, beam = False, return_coef = False):
                 continue
             tYj = p2['t50_'+ch_]
             lYj2 = kappa * tYj
+            if use_alt:
+                lYj2_kappa_alt = kappa_alt * tYj
             sigmaYj2 = sigma_inj[ch_]**2
             if beam:
                 sigmaYj2 += sigma_beam**2
@@ -234,7 +255,43 @@ def computeXi(p1, p2, beam = False, return_coef = False):
             gamma[i,j] = (sigmav * np.abs(tXi - tYj) / 
                           np.sqrt( 2 * np.abs( lXi2 - lYj2 ) +
                                    sigmaXi2 + sigmaYj2 )).to('').value
+            if use_alt:
+                alpha_kappa_alt[i,j] \
+                    = ((4 * lcorr**2 - 2 * lXi2 - 2 * lYj2 +
+                        sigmaXi2 + sigmaYj2 ) /
+                       ( 2 * np.abs(lXi2_kappa_alt - lYj2_kappa_alt) +
+                         sigmaXi2 + sigmaYj2 )).to('').value
+                alpha_sigmav_alt[i,j] = alpha[i,j]
+                alpha_lcorr_alt[i,j] \
+                    = ((4 * lcorr_alt**2 - 2 * lXi2 - 2 * lYj2 +
+                        sigmaXi2 + sigmaYj2 ) /
+                       ( 2 * np.abs(lXi2 - lYj2) +
+                         sigmaXi2 + sigmaYj2 )).to('').value
+                beta_sigmav_alt[i,j] \
+                    = (sigmav_alt * np.abs(tXi - tYj) / 
+                       np.sqrt( 4 * lcorr**2 - 2 * lXi2 - 2 * lYj2 +
+                                sigmaXi2 + sigmaYj2 )).to('').value
+                beta_kappa_alt[i,j] \
+                    = (sigmav_alt * np.abs(tXi - tYj) / 
+                       np.sqrt( 4 * lcorr**2 - 2 *
+                                lXi2_kappa_alt - 2 * lYj2_kappa_alt +
+                                sigmaXi2 + sigmaYj2 )).to('').value
+                beta_lcorr_alt[i,j] \
+                    = (sigmav * np.abs(tXi - tYj) / 
+                       np.sqrt( 4 * lcorr_alt**2 -
+                                2 * lXi2 - 2 * lYj2 +
+                                sigmaXi2 + sigmaYj2 )).to('').value
+                gamma_sigmav_alt[i,j] \
+                    = (sigmav_alt * np.abs(tXi - tYj) / 
+                       np.sqrt( 2 * np.abs( lXi2 - lYj2 ) +
+                                sigmaXi2 + sigmaYj2 )).to('').value
+                gamma_kappa_alt[i,j] \
+                    = (sigmav * np.abs(tXi - tYj) / 
+                       np.sqrt( 2 * np.abs( lXi2_kappa_alt - lYj2_kappa_alt ) +
+                                sigmaXi2 + sigmaYj2 )).to('').value
+                gamma_lcorr_alt[i,j] = gamma[i,j]
 
+            
             # Add contribution
             Xi += fXi * fYj * \
                 ( np.log( alpha[i,j] ) +
@@ -242,13 +299,47 @@ def computeXi(p1, p2, beam = False, return_coef = False):
                   np.arcsinh(beta[i,j]) -
                   2 * np.sqrt( gamma[i,j]**2 / (1 + gamma[i,j]**2) ) *
                   np.arcsinh(gamma[i,j]) )
+            if use_alt:
+                Xi_kappa_alt += fXi * fYj * \
+                    ( np.log( alpha_kappa_alt[i,j] ) +
+                      2 * np.sqrt( beta_kappa_alt[i,j]**2 /
+                                   (1 + beta_kappa_alt[i,j]**2) ) *
+                      np.arcsinh(beta_kappa_alt[i,j]) -
+                      2 * np.sqrt( gamma_kappa_alt[i,j]**2 /
+                                   (1 + gamma_kappa_alt[i,j]**2) ) *
+                      np.arcsinh(gamma_kappa_alt[i,j]) )
+                Xi_sigmav_alt += fXi * fYj * \
+                    ( np.log( alpha_sigmav_alt[i,j] ) +
+                      2 * np.sqrt( beta_sigmav_alt[i,j]**2 /
+                                   (1 + beta_sigmav_alt[i,j]**2) ) *
+                      np.arcsinh(beta_sigmav_alt[i,j]) -
+                      2 * np.sqrt( gamma_sigmav_alt[i,j]**2 /
+                                   (1 + gamma_sigmav_alt[i,j]**2) ) *
+                      np.arcsinh(gamma_sigmav_alt[i,j]) )
+                Xi_lcorr_alt += fXi * fYj * \
+                    ( np.log( alpha_lcorr_alt[i,j] ) +
+                      2 * np.sqrt( beta_lcorr_alt[i,j]**2 /
+                                   (1 + beta_lcorr_alt[i,j]**2) ) *
+                      np.arcsinh(beta_lcorr_alt[i,j]) -
+                      2 * np.sqrt( gamma_lcorr_alt[i,j]**2 /
+                                   (1 + gamma_lcorr_alt[i,j]**2) ) *
+                      np.arcsinh(gamma_lcorr_alt[i,j]) )
 
     # Return
     if not return_coef:
-        return Xi
+        if not use_alt:
+            return Xi
+        else:
+            return Xi, Xi_kappa_alt, Xi_sigmav_alt, Xi_lcorr_alt
     else:
-        return Xi, alpha, beta, gamma
-            
+        if not use_alt:
+            return Xi, alpha, beta, gamma
+        else:
+            return Xi, Xi_kappa_alt, Xi_sigmav_alt, Xi_lcorr_alt, \
+                alpha, beta, gamma, \
+                alpha_kappa_alt, beta_kappa_alt, gamma_kappa_alt, \
+                alpha_sigmav_alt, beta_sigmav_alt, gamma_sigmav_alt, \
+                alpha_lcorr_alt, beta_lcorr_alt, gamma_lcorr_alt
 
 # Get element-element cross-correlations without normalization factor
 for e in prod.keys():
@@ -259,16 +350,21 @@ for e in prod.keys():
     
     # Get mean
     prod[e]['mean'] = lcorr**2 * np.sqrt(Gamma/kappa)
+    prod[e]['mean_kappa_alt'] = lcorr**2 * np.sqrt(Gamma/kappa_alt)
     for ch in channels:
         fi = prod[e]['f_'+ch]
         if fi == 0:
             continue
         ti = prod[e]['t50_'+ch]
         l2 = kappa * ti
+        l2_kappa_alt = kappa_alt * ti
         prod[e]['mean'] -= fi * l2 * np.sqrt(Gamma/kappa)
+        prod[e]['mean_kappa_alt'] -= fi * l2_kappa_alt * \
+            np.sqrt(Gamma/kappa_alt)
 
     # Get correlations
     prod[e]['corr'] = {}
+    prod[e]['corr_alt'] = {}
     prod[e]['corr_beam'] = {}
     for e_ in prod.keys():
         if prod[e]['Z'] < Zlo or \
@@ -280,11 +376,15 @@ for e in prod.keys():
             prod[e]['corr'][e_] = np.nan
         else:
             prod[e]['corr'][e_] = computeXi(prod[e], prod[e_])
+            prod[e]['corr_alt'][e_] \
+                = np.array(computeXi(prod[e], prod[e_], use_alt=True)[1:])
             prod[e]['corr_beam'][e_] = computeXi(prod[e], prod[e_], beam=True)
             if e == e_:
                 # Get dispersion
                 prod[e]['sigma2'] = (1 + sigmaw2) / (8 * np.pi) * \
                     prod[e]['corr'][e_]
+                prod[e]['sigma2_alt'] = (1 + sigmaw2) / (8 * np.pi) * \
+                    prod[e]['corr_alt'][e_]
                 prod[e]['sigma2_beam'] = (1 + sigmaw2) / (8 * np.pi) * \
                     prod[e]['corr_beam'][e_]
                 
@@ -301,6 +401,10 @@ for e in prod.keys():
                 (1 + sigmaw2) / \
                 (8 * np.pi *
                  np.sqrt(prod[e]['sigma2'] * prod[e_]['sigma2']))
+            prod[e]['corr_alt'][e_] *= \
+                (1 + sigmaw2) / \
+                (8 * np.pi *
+                 np.sqrt(prod[e]['sigma2_alt'] * prod[e_]['sigma2_alt']))
             prod[e]['corr_beam'][e_] *= \
                 (1 + sigmaw2) / \
                 (8 * np.pi *
@@ -754,3 +858,69 @@ plt.subplots_adjust(left=0.18, bottom=0.1, top=0.95, right=0.95, hspace=0.07)
 plt.savefig(osp.join('output', 'Xi_comp.pdf'))
 
 
+# Plot alternatives
+fig = plt.figure(7, figsize=(7,2))
+fig.clf()
+for i in range(3):
+
+    # Create panel
+    #ax = fig.add_subplot(3,1,i+1)
+    ax = fig.add_subplot(1,3,i+1)
+
+    # Gather range in predicted correlation
+    x = []
+    y1 = []
+    y2 = []
+    for e in prod.keys():
+        if prod[e]['yld_tot'][-1] == 0:
+            continue
+        if np.isnan(prod[e]['corr']['C']):
+            continue
+        for e_ in prod[e]['corr_alt'].keys():
+            x.append(prod[e]['corr'][e_])
+            y1.append(prod[e]['corr_alt'][e_][i,0])
+            y2.append(prod[e]['corr_alt'][e_][i,1])
+    idx = np.argsort(x)
+    x = np.array(x)[idx]
+    y1 = np.array(y1)[idx]
+    y2 = np.array(y2)[idx]
+
+    # Labels
+    if i == 0:
+        lab = [r'$\kappa/3$', r'$\kappa\times 3$']
+        qty = 'kappa'
+    elif i == 1:
+        lab = [r'$\sigma_v/3$', r'$\sigma_v\times 3$']
+        qty = 'sigma_v'
+    else:
+        lab = [r'$\ell_\mathrm{corr}/2$', r'$\ell_\mathrm{corr}\times 2$']
+        qty = 'l_corr'
+
+    # Print typical variation
+    print("{:s}: variation by factor of {:f}".
+          format(qty,
+                 10.**np.nanmedian(np.abs(np.log10(y2/y1))/2)))
+        
+    # Plot
+    ax.plot([0,1], [0,1], 'k--', lw=1, alpha=0.5)
+    ax.fill_between(x, y1, y2, alpha=0.5)
+    ax.plot(x, y1, 'C1', lw=0.5, label=lab[0])
+    ax.plot(x, y2, 'C2', lw=0.5, label=lab[1])
+
+    # Add legend
+    ax.legend(loc='upper left', prop={'size' : 10})
+
+    # Adjust limits and labels
+    ax.set_xlim([-0.05, 1.05])
+    ax.set_ylim([-0.05, 1.05])
+    if i > 0:
+        ax.set_yticklabels('')
+    else:
+        ax.set_ylabel(r'$\Xi_{XY,\mathrm{var}}$')
+    ax.set_xlabel(r'$\Xi_{XY,\mathrm{fid}}$')
+
+# Adjust spacing
+plt.subplots_adjust(left=0.1, bottom=0.25, top=0.95, right=0.97, wspace=0.07)
+
+# Save
+plt.savefig(osp.join('output', 'Xi_var.pdf'))
